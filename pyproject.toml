@@ -1,0 +1,14 @@
+[project]
+name = "mock-whatsapp-backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.12",
+    "openai>=1.82.0",
+    "pgvector>=0.4.1",
+    "python-dotenv>=1.1.0",
+    "sqlmodel>=0.0.24",
+    "together>=1.5.8",
+]
