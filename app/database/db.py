@@ -1,5 +1,5 @@
 from typing import List, Optional
-from app.ai import get_embedding
+from app.embeddings import get_embedding
 from sqlmodel import Session
 from app.database.engine import db_engine
 from app.database.models import Chunk
@@ -45,7 +45,7 @@ def vector_search(query: str, n_results: int, where: dict) -> List[Chunk]:
             raise Exception(f"Failed to search for knowledge: {str(e)}")
 
 
-async def get_or_create_user(wa_id: str, name: Optional[str] = None) -> User:
+def get_or_create_user(wa_id: str, name: Optional[str] = None) -> User:
     """
     Get existing user or create new one if they don't exist.
     Handles all database operations and error logging.
@@ -67,7 +67,8 @@ async def get_or_create_user(wa_id: str, name: Optional[str] = None) -> User:
                 .with_for_update()
             )
             result = session.exec(statement)
-            user = result.scalar_one_or_none()
+            user = result.one_or_none()
+            # user = result.scalar_one_or_none()
             if user:
                 session.refresh(user)
                 return user
@@ -87,9 +88,7 @@ async def get_or_create_user(wa_id: str, name: Optional[str] = None) -> User:
             raise Exception(f"Failed to get or create user: {str(e)}")
 
 
-async def get_user_message_history(
-    user_id: int, limit: int = 10
-) -> Optional[List[Message]]:
+def get_user_message_history(user_id: int, limit: int = 10) -> Optional[List[Message]]:
     with Session(db_engine) as session:
         try:
             statement = (
@@ -100,7 +99,8 @@ async def get_user_message_history(
             )
 
             result = session.exec(statement)
-            messages = result.scalars().all()
+            messages = result.all()
+            # messages = result.scalars().all()
 
             # If no messages found, return empty list
             if not messages:

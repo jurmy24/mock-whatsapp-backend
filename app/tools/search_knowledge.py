@@ -15,7 +15,6 @@ async def search_knowledge(
         class_id = int(class_id)
         # Retrieve the resources for the class
         resource_ids = db.get_class_resources(class_id)
-        assert resource_ids
 
         # Retrieve the relevant content
         retrieved_content = vector_search(

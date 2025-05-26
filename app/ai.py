@@ -2,12 +2,13 @@ from together import Together
 from typing import List, Optional
 from dotenv import load_dotenv
 import os
+from datetime import datetime, timezone
 
 load_dotenv()
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 
 from app.database.db import get_user_message_history
-from app.database.models import Message, User
+from app.database.models import Message, User, MessageRole
 
 system_prompt = """<role>
 You are Twiga, a WhatsApp bot developed by the Tanzania AI Community for secondary school teachers in Tanzania. You assist teachers by chatting with them and providing them with accurate, curriculum-aligned education materials. You understand that you are communicating on the WhatsApp messaging platform and that you have access to the textbooks for the course the teacher is teaching. You will often need to use the course materials to ensure that your responses are contextually grounded. You are friendly and helpful, always aiming to provide clear explanations whether you're providing educational content or just chatting.
@@ -66,17 +67,24 @@ Here are your capabilities:
 
 
 def generate_response(
-    history: List[Message],
     user: User,
     message: Message,
 ) -> Optional[Message]:
     """Generate a response, handling message batching and tool calls."""
+    if user.id is None:
+        return None
 
+    history = get_user_message_history(user.id)
     api_messages = _format_messages([message], history, user)
 
     llm_response = "THIS IS WHERE YOU SETUP LLM RESPONSES"
 
-    return llm_response
+    # Create and return a Message object
+    return Message(
+        user_id=user.id,
+        role=MessageRole.assistant,
+        content=llm_response,
+    )
 
 
 def _format_messages(
@@ -121,18 +129,3 @@ def _format_messages(
     formatted_messages.extend(msg.to_api_format() for msg in new_messages)
 
     return formatted_messages
-
-
-def get_embedding(text: str) -> List[float]:
-    client = Together(api_key=LLM_API_KEY)
-    response = client.embeddings.create(
-        model="BAAI/bge-large-en-v1.5",
-        input=text,
-    )
-    assert response.data
-    embedding = response.data[0].embedding
-
-    if embedding is None:
-        raise ValueError("Failed to generate embedding")
-
-    return embedding
