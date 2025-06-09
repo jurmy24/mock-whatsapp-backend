@@ -42,6 +42,9 @@ async def handle_request(request: Request) -> JSONResponse:
 
     message = extract_message(message_info.get("message", None))
 
+    # wa_id = "+5511999999999"
+    # print(f"New message from {message_info['wa_id']}: {message}")
+
     user = db.get_or_create_user(
         wa_id=message_info["wa_id"], name=message_info.get("name")
     )

@@ -3,6 +3,8 @@ from typing import List, Optional
 from dotenv import load_dotenv
 import os
 from datetime import datetime, timezone
+from langchain_together import ChatTogether
+
 
 load_dotenv()
 LLM_API_KEY = os.getenv("LLM_API_KEY")
@@ -66,6 +68,12 @@ Here are your capabilities:
 """
 
 
+chat = ChatTogether(
+    together_api_key=LLM_API_KEY,
+    model="meta-llama/Llama-3-70b-chat-hf",
+)
+
+
 def generate_response(
     user: User,
     message: Message,
@@ -77,13 +85,13 @@ def generate_response(
     history = get_user_message_history(user.id)
     api_messages = _format_messages([message], history, user)
 
-    llm_response = "THIS IS WHERE YOU SETUP LLM RESPONSES"
+    llm_response = chat.invoke(api_messages)
 
     # Create and return a Message object
     return Message(
         user_id=user.id,
         role=MessageRole.assistant,
-        content=llm_response,
+        content=llm_response.content,
     )
 
 
