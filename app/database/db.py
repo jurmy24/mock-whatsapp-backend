@@ -1,10 +1,10 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 from app.embeddings import get_embedding
-from sqlmodel import Session
+from sqlmodel import Session, or_
 from app.database.engine import db_engine
-from app.database.models import Chunk
+from app.database.models import Chunk, SubjectClassStatus
 from sqlalchemy import text
-from sqlmodel import select, desc
+from sqlmodel import select, desc, delete, exists, and_, insert
 from sqlalchemy.orm import selectinload
 
 from app.database.models import (
@@ -13,7 +13,110 @@ from app.database.models import (
     TeacherClass,
     Class,
     Chunk,
+    Subject,
 )
+
+
+def update_user(user: User) -> User:
+    """
+    Update any information about an existing user and return the updated user.
+    """
+    with Session(db_engine) as session:
+        try:
+            # Add user to session and refresh to ensure we have latest data
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            print(f"Updated user {user.wa_id}: {user}")
+            return user
+        except Exception as e:
+            print(f"Failed to update user {user.wa_id}: {str(e)}")
+            raise Exception(f"Failed to update user: {str(e)}")
+
+
+def get_class_ids_from_class_info(
+    class_info: Dict[str, List[str]],
+) -> Optional[List[int]]:
+    """
+    Get class IDs from a class_info dictionary structure in a single query
+
+    Args:
+        class_info: Dictionary mapping subject names to lists of grade levels
+        Example: {"geography": ["os2"], "mathematics": ["os1", "os2"]}
+
+    Returns:
+        List of class IDs matching the subject-grade combinations
+    """
+    with Session(db_engine) as session:
+        # Build conditions for each subject and its grade levels
+        conditions = [
+            and_(Subject.name == subject_name, Class.grade_level.in_(grade_levels))  # type: ignore
+            for subject_name, grade_levels in class_info.items()
+        ]
+
+        query = (
+            select(Class.id)
+            .join(Subject, Class.subject_id == Subject.id)  # type: ignore
+            .where(or_(*conditions), Class.status == SubjectClassStatus.active)
+        )
+
+        result = session.exec(query)
+        class_ids = list(result.all())
+
+        if not class_ids:
+            print(f"No classes found for class info: {class_info}")
+            return None
+
+        return class_ids
+
+
+def assign_teacher_to_classes(
+    user: User, class_ids: List[int], subject_id: Optional[int] = None
+):
+    """
+    Assign a teacher to a list of classes by creating teacher-class relationships.
+    If subject_id is provided, only replaces classes with that subject_id.
+    Otherwise replaces all teacher-class relationships.
+    """
+    with Session(db_engine) as session:
+        try:
+            # Construct delete query based on subject_id
+            delete_query = delete(TeacherClass).where(
+                TeacherClass.teacher_id == user.id  # type: ignore
+            )
+
+            if subject_id is not None:
+                # Join with Class table to filter by subject_id
+                delete_query = delete_query.where(
+                    exists().where(
+                        and_(
+                            Class.id == TeacherClass.class_id,
+                            Class.subject_id == subject_id,
+                        )
+                    )
+                )
+
+            # Delete existing relationships
+            session.execute(delete_query)
+
+            # Bulk insert new relationships
+            if class_ids:
+                values = [
+                    {"teacher_id": user.id, "class_id": class_id}
+                    for class_id in class_ids
+                ]
+                session.execute(insert(TeacherClass), values)
+            else:
+                print(f"No classes to assign for teacher {user.wa_id}")
+
+            # Commit the transaction
+            session.commit()
+
+        except Exception as e:
+            print(
+                f"Failed to assign teacher {user.wa_id} to classes {class_ids}: {str(e)}"
+            )
+            raise Exception(f"Failed to assign teacher to classes: {str(e)}")
 
 
 def vector_search(query: str, n_results: int, where: dict) -> List[Chunk]:
@@ -162,7 +265,7 @@ def get_class_resources(class_id: int) -> Optional[List[int]]:
                 """
             )
 
-            result = session.exec(query, {"class_id": class_id})
+            result = session.execute(query, {"class_id": class_id})
             resource_ids = [row[0] for row in result.fetchall()]
 
             if not resource_ids:
