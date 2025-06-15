@@ -10,14 +10,7 @@ from app.agent.utils import print_boxed
 from app.agent.config import AgentConfig, AgentContext
 from app.agent.tools import execute_tool_call
 import app.database.db as db
-from app.database.db import get_user_message_history
 from app.database.models import Message, User, MessageRole
-
-
-# reasoning_agent_chat = ChatTogether(
-#     api_key=os.getenv("LLM_API_KEY"),
-#     model="meta-llama/Llama-4-Scout-17B-16E-Instruct",
-# )
 
 
 class ReasoningAgent(Agent):
@@ -26,8 +19,6 @@ class ReasoningAgent(Agent):
 
     def llm_call(self) -> str:
         return self.chat.invoke(self.message_history)
-        # chat_with_tools = self.chat.bind_tools(self.tools)
-        # return chat_with_tools.invoke(self.message_history)
 
     async def run(self, message: list[dict]) -> Message:
         # history = get_user_message_history(self.context.user.id)
@@ -87,7 +78,6 @@ class ReasoningAgent(Agent):
 
             except Exception as e:
                 print(f"❌ Error in iteration {current_iteration + 1}: {str(e)}")
-                # Add error to history and continue
                 self.message_history.append(
                     {"role": "user", "content": f"Error occurred: {str(e)}. Please try a different approach."}
                 )
@@ -106,29 +96,18 @@ class ReasoningAgent(Agent):
             thought_match = re.search(r"Thought:\s*(.*?)\n\nAction:", response, re.DOTALL)
             thought = thought_match.group(1).strip() if thought_match else None
 
-            # Try extracting JSON inside a code block first
             action_match = re.search(r"```json\s*(\{.*?\})\s*```", response, re.DOTALL)
-
             if not action_match:
-                # Fall back to plain JSON after 'Action:'
                 action_match = re.search(r"Action:\s*(\{.*\})", response, re.DOTALL)
 
             action = json.loads(action_match.group(1)) if action_match else None
 
-
-            # thought_and_action = response.split("Thought:")[1]
-            # thought_and_action = thought_and_action.split("Action:")
-            # thought = thought_and_action[0].strip()
-            # action = json.loads(thought_and_action[1])
 
             action = {
                 "id": action["id"],
                 "name": action["name"],
                 "args": action["args"],
             }
-
-            print(action)
-            print("I'M HEREEEE")
 
         else:
             thought = "The assistant didn't follow the ReAct format properly."
