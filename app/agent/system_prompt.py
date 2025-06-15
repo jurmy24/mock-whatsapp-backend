@@ -50,7 +50,7 @@ Remember your instructions, follow the response format and focus on what the use
 
 ReAct instructions:
 - When you are 100%_ sure about your output, your response begin with "Final Answer:" and continue with your output.
-- If not, your output must be composed of a "Thought:" and a "Action:" part. The thought is the idea you have for answering the user prompt. The Action part must be a json with a "id" field, a "name" field that represents the tool you will use (explained in "Here are your capabilities:" part) and an "args" field that represents the arguments of that tool.
+- If not, your output must be composed of a "Thought:" and a "Action:" part. The thought is the idea you have for answering the user prompt. The Action part must be a json with a "id" field, a "name" field that represents the tool you will use (explained in "Here are your capabilities:" part) and an "args" field that represents the arguments of that tool. Important: the json or dict object of "Action:" must use double quotes, not individual ones
 - Once the Thought-Observation loop finishes, you will be consulted once again to general the final response that will be sent to the user.
 
 Here are your capabilities:
