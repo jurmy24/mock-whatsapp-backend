@@ -1,11 +1,18 @@
 import copy
 import json
+from enum import Enum
+
+
+class Tool(str, Enum):
+    SEARCH_KNOWLEDGE = "search_knowledge"
+    GENERATE_EXERCISE = "generate_exercise"
+
 
 tools_metadata = [
     {
         "type": "function",
         "function": {
-            "name": "search_knowledge",
+            "name": Tool.SEARCH_KNOWLEDGE,
             "description": "Get relevant information from the knowledge base.",
             "parameters": {
                 "type": "object",
@@ -26,7 +33,7 @@ tools_metadata = [
     {
         "type": "function",
         "function": {
-            "name": "generate_exercise",
+            "name": Tool.GENERATE_EXERCISE,
             "description": "Generate a single question for the students based on course literature",
             "parameters": {
                 "type": "object",

@@ -9,7 +9,7 @@ from pydantic import SecretStr, Field
 from app.database.db import get_user_message_history
 import app.database.db as db
 from app.database.models import Message, User, MessageRole
-from app.tools.registry import get_tools_metadata
+from app.tools.registry import get_tools_metadata, Tool
 from app.tools.search_knowledge import search_knowledge
 from app.tools.generate_exercise import generate_exercise
 
@@ -177,6 +177,39 @@ async def execute_tool_call(tool_name: str, tool_args: dict, user: User) -> str:
         return f"Error executing {tool_name}: {str(e)}"
 
 
+async def generate_agentic_response(
+    user: User,
+    message: Message,
+) -> Message | None:
+    from app.agent.agent import Agent
+    from app.agent.config import AgentContext, available_tools, reasoning_agent_config
+    from app.agent.system_prompt import system_prompt
+    from app.agent.reasoning_agent import ReasoningAgent
+
+    agent_context = AgentContext(
+        user=user,
+        should_use_tools=Tool,
+        available_tools=available_tools,
+    )
+
+    if user.id is None:
+        return None
+
+    reasoning_agent=ReasoningAgent(
+        chat=Agent.get_chat(reasoning_agent_config.model),
+        config=reasoning_agent_config,
+        context=agent_context,
+    )
+
+    reasoning_answer_response = await reasoning_agent.run(message)
+
+    # history = get_user_message_history(user.id)
+    # api_messages = _format_messages([message], None, user)
+    # llm_response = 
+
+    return reasoning_answer_response
+
+
 async def generate_response(
     user: User,
     message: Message,
@@ -186,7 +219,7 @@ async def generate_response(
         return None
 
     history = get_user_message_history(user.id)
-    api_messages = _format_messages([message], history, user)
+    api_messages = _format_messages([message], None, user)
 
     # Create and bind tools to the chat model
     tools = create_langchain_tools(user)
@@ -194,13 +227,28 @@ async def generate_response(
 
     # Get the initial response
     llm_response = chat_with_tools.invoke(api_messages)
-    print("LLM RESPONSE")
-    print(llm_response)
+
+    temp_tool_calls = None
+    if "python_start" in llm_response.content:
+        temp_tool_calls = llm_response.content
+        temp_tool_calls = temp_tool_calls.replace('<|python_start|>', '').replace('<|python_end|>', '')
+        temp_tool_calls = json.loads(temp_tool_calls)
+
+        print(temp_tool_calls)
+
+        for call in range(len(temp_tool_calls)):
+            for k, v in temp_tool_calls[call]["function"].items():
+                if k == "arguments":
+                    k = "args"
+
+                temp_tool_calls[call][k] = v
 
     # Check if the response contains tool calls
-    tool_calls = getattr(llm_response, "tool_calls", None)
+    tool_calls = getattr(llm_response, "tool_calls", None) or temp_tool_calls
+
     if tool_calls:
-        print("TOOL CALLS")
+        # print("TOOL CALLS")
+        # print(tool_calls)
         # Save the assistant message with tool calls
         tool_calls_data = [
             {
