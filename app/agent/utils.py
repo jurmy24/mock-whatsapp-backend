@@ -1,13 +1,12 @@
-from typing import Optional
 import textwrap
-
-box_width = 80  # Width of output boxes
 
 
 def box_text(
-    text: str, title: Optional[str] = None, emoji: Optional[str] = None
+    text: str, title: str | None = None, emoji: str | None = None
 ) -> str:
     """Create a boxed text with optional title and emoji."""
+    box_width = 80  # Width of output boxes
+
     # Handle None or empty text
     if not text:
         text = "No output"
@@ -54,3 +53,8 @@ def box_text(
 
     result.append(f"╚{'═' * (width + 2)}╝")
     return "\n".join(result)
+
+
+def print_boxed(text: str, title: str | None = None, emoji: str | None = None):
+    """Print text in a box with optional title and emoji."""
+    print(box_text(text, title, emoji))
