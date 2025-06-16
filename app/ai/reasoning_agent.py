@@ -20,7 +20,7 @@ class ReasoningAgent(Agent):
     def llm_call(self) -> str:
         return self.chat.invoke(self.message_history)
 
-    async def run(self, message: list[dict]) -> Message:
+    async def run(self, message: list[dict]):
         api_messages = self._format_messages(
             new_messages=[message],
             database_messages=None,  # history,
@@ -45,40 +45,65 @@ class ReasoningAgent(Agent):
 
             try:
                 llm_response = self.llm_call()
+                print_boxed(llm_response.content, "Unparsed Response", "🤖")
 
-                result, action = self.parse_response(llm_response.content)
-
-                if action is None:
-                    print_boxed(result, "Final Answer", "🎯")
-
-                    final_message = self._generate_final_response()
-                    return final_message
-
-                if action.get("error") is not None:
-                    raise Exception
-
-                thought = result
-
-                print_boxed(
-                    thought, f"Thought (Iteration {current_iteration + 1})", "🤔"
-                )
-                print_boxed(json.dumps(action), "Action", "🛠️")
-
-                action_result = await execute_tool_call(action["name"], action["args"])
-
-                self._save_action(action=action, result=action_result)
-
-                print_boxed(action_result, f"Result from action {action}")
-
-                add_to_history = f"Thought: {thought}\nAction: {action}"
-                self.message_history.append(
-                    {"role": "assistant", "content": add_to_history}
-                )
-                self.message_history.append(
-                    {"role": "user", "content": f"Observation: {action_result}"}
+                final_answer, thought, action = self.parse_response(
+                    llm_response.content
                 )
 
-                current_iteration += 1
+                if final_answer:
+                    print_boxed(final_answer, "Final Answer", "🎯")
+                    # final_message = self._generate_final_response()
+                    self.message_history.append(
+                        {
+                            "role": "assistant",
+                            "content": "Final Answer: " + final_answer,
+                        }
+                    )
+                    final_message = Message(
+                        user_id=self.context.user.id,
+                        role=MessageRole.assistant,
+                        content=final_answer,
+                    )
+                    db.create_new_message(final_message)
+                    break
+
+                if thought:
+                    print_boxed(thought, "Thought", "🤔")
+                    thought_message = Message(
+                        user_id=self.context.user.id,
+                        role=MessageRole.assistant,
+                        content=thought,
+                    )
+                    db.create_new_message(thought_message)
+                    self.message_history.append(
+                        {"role": "assistant", "content": "Thought: " + thought}
+                    )
+
+                if action:
+                    if action.get("error") is not None:
+                        raise Exception
+
+                    print_boxed(json.dumps(action), "Action", "🛠️")
+
+                    self.message_history.append(
+                        {
+                            "role": "assistant",
+                            "content": "Action: " + json.dumps(action),
+                        }
+                    )
+
+                    action_result = await execute_tool_call(
+                        action["name"], action["args"]
+                    )
+                    self._save_action(action=action, result=action_result)
+
+                    print_boxed(action_result, f"Result from action {action['name']}")
+
+                    self.message_history.append(
+                        {"role": "tool", "content": f"Observation: {action_result}"}
+                    )
+
                 print("-" * 80)
 
             except Exception as e:
@@ -89,43 +114,55 @@ class ReasoningAgent(Agent):
                         "content": f"Error occurred: {str(e)}. Please try a different approach.",
                     }
                 )
+            finally:
                 current_iteration += 1
+                if current_iteration >= self.max_iterations:
+                    print(
+                        f"⚠️ Maximum iterations ({self.max_iterations}) reached without completion"
+                    )
+                    break
 
-        print(
-            f"⚠️ Maximum iterations ({self.max_iterations}) reached without completion"
-        )
-        return "Task incomplete - maximum iterations reached"
+    def parse_response(
+        self, response: str
+    ) -> tuple[str | None, str | None, dict[str, Any] | None]:
+        """Parse the LLM response and extract thought and action input
+        Args:
+            response: The response from the LLM
 
-    def parse_response(self, response: str) -> tuple[str, dict[str, Any] | None]:
-        """Parse the LLM response and extract thought and action input"""
-        print(response)
+        Returns:
+            tuple[str | None, str | None, dict[str, Any] | None]: The final answer, thought, or action input
+        """
+
         if "Final Answer:" in response:
             final_answer = response.split("Final Answer:")[1].strip()
-            return final_answer, None
-
-        if "Thought:" in response and "Action:" in response:
-            thought_match = re.search(
-                r"Thought:\s*(.*?)\n\nAction:", response, re.DOTALL
-            )
-            thought = thought_match.group(1).strip() if thought_match else None
-
+            return final_answer, None, None
+        elif "Thought:" in response:
+            thought = response.split("Thought:")[1].strip()
+            return None, thought, None
+        elif "Action: " in response:
+            # First try to find JSON in code blocks
             action_match = re.search(r"```json\s*(\{.*?\})\s*```", response, re.DOTALL)
             if not action_match:
-                action_match = re.search(r"Action:\s*(\{.*\})", response, re.DOTALL)
+                # Fallback: look for JSON after "Action:" - improved to handle multi-line JSON
+                action_match = re.search(r"Action:\s*(\{.*?\})", response, re.DOTALL)
 
-            action = json.loads(action_match.group(1)) if action_match else None
-
-            action = {
-                "id": action["id"],
-                "name": action["name"],
-                "args": action["args"],
-            }
-
+            if action_match:
+                try:
+                    action = json.loads(action_match.group(1))
+                    action = {
+                        "id": action["id"],
+                        "name": action["name"],
+                        "args": action["args"],
+                    }
+                except (json.JSONDecodeError, KeyError) as e:
+                    action = {"error": f"Failed to parse action JSON: {str(e)}"}
+            else:
+                action = {"error": "No valid action found in response."}
+            return None, None, action
         else:
             thought = "The assistant didn't follow the ReAct format properly."
             action = {"error": "The assistant didn't follow the ReAct format properly."}
-
-        return thought, action
+            return None, thought, action
 
     def _save_action(self, action: dict[str, Any], result: str) -> None:
         tool_message = Message(

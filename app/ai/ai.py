@@ -130,7 +130,7 @@ async def execute_tool_call(tool_name: str, tool_args: dict, user: User) -> str:
         return f"Error executing {tool_name}: {str(e)}"
 
 
-async def generate_agentic_response(
+async def run_agent(
     user: User,
     message: Message,
 ) -> Message | None:
@@ -150,9 +150,7 @@ async def generate_agentic_response(
         context=agent_context,
     )
 
-    reasoning_answer_response = await reasoning_agent.run(message)
-
-    return reasoning_answer_response
+    await reasoning_agent.run(message)
 
 
 # async def generate_response(
