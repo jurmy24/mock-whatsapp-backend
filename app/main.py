@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi import Request
 from fastapi.responses import JSONResponse
 import app.database.db as db
-from app.ai import generate_response, generate_agentic_response
+from app.ai.ai import generate_agentic_response
 from app.database.models import (
     ClassInfo,
     Message,
@@ -79,11 +79,7 @@ async def handle_request(request: Request) -> JSONResponse:
     """
     body = await request.json()
     message_info = extract_message_info(body)
-
     message = extract_message(message_info.get("message", None))
-
-    # wa_id = "+5511999999999"
-    # print(f"New message from {message_info['wa_id']}: {message}")
 
     user = db.get_or_create_user(
         wa_id=message_info["wa_id"], name=message_info.get("name")

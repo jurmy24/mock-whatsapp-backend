@@ -1,9 +1,7 @@
 import textwrap
 
 
-def box_text(
-    text: str, title: str | None = None, emoji: str | None = None
-) -> str:
+def box_text(text: str, title: str | None = None, emoji: str | None = None) -> str:
     """Create a boxed text with optional title and emoji."""
     box_width = 80  # Width of output boxes
 

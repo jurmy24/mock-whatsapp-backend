@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional
-from app.embeddings import get_embedding
+from app.ai.embeddings import get_embedding
 from sqlmodel import Session, or_
 from app.database.engine import db_engine
 from app.database.models import Chunk, SubjectClassStatus
